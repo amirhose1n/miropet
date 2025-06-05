@@ -1,0 +1,25 @@
+{
+  "name": "miropet-monorepo",
+  "version": "1.0.0",
+  "description": "MiroPet full-stack application",
+  "private": true,
+  "scripts": {
+    "server-prd": "cd miropet-server && npm run start-prd",
+    "client-prd": "cd miropet-client && npm run start-prd",
+    "dashboard-prd": "cd miropet-dashboard && npm run start-prd",
+    "server-dev": "cd miropet-server && npm run dev",
+    "client-dev": "cd miropet-client && npm run dev",
+    "dashboard-dev": "cd miropet-dashboard && npm run dev",
+    "build-all": "cd miropet-server && npm run build && cd ../miropet-client && npm run build && cd ../miropet-dashboard && npm run build"
+  },
+  "keywords": [
+    "pet-store",
+    "fullstack",
+    "typescript",
+    "nodejs",
+    "nextjs",
+    "react"
+  ],
+  "author": "",
+  "license": "ISC"
+}
