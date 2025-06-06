@@ -89,9 +89,11 @@ const UserForm: React.FC = () => {
           alignItems: "center",
           gap: 2,
           mb: 4,
-          justifyContent: "space-between",
         }}
       >
+        <IconButton onClick={() => navigate("/users")}>
+          <ArrowBack />
+        </IconButton>
         <Box>
           <Typography
             variant="h4"
@@ -105,9 +107,6 @@ const UserForm: React.FC = () => {
             کاربر مدیر جدید برای سیستم ایجاد کنید
           </Typography>
         </Box>
-        <IconButton onClick={() => navigate("/users")}>
-          <ArrowBack />
-        </IconButton>
       </Box>
 
       <Paper sx={{ p: 4, maxWidth: 600, mx: "auto" }}>

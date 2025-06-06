@@ -22,6 +22,7 @@ import React, { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import * as yup from "yup";
+import ImageKitUpload from "../components/ImageKitUpload";
 import apiService from "../services/api";
 import { ICategory, ProductFormData } from "../types";
 
@@ -549,58 +550,73 @@ const ProductForm: React.FC<{ disabled?: boolean }> = ({ disabled }) => {
                         <Typography variant="subtitle2" gutterBottom>
                           تصاویر
                         </Typography>
-                        {watch(`variations.${variationIndex}.images`)?.map(
-                          (_, imageIndex) => (
-                            <Box
-                              key={imageIndex}
-                              sx={{
-                                display: "flex",
-                                gap: 1,
-                                mb: 1,
-                                alignItems: "center",
-                              }}
-                            >
-                              <TextField
-                                {...register(
-                                  `variations.${variationIndex}.images.${imageIndex}`
-                                )}
-                                fullWidth
-                                label={`آدرس تصویر ${imageIndex + 1}`}
-                                placeholder="http://example.com/image.jpg"
-                                size="small"
-                                error={
-                                  !!errors.variations?.[variationIndex]
-                                    ?.images?.[imageIndex]
-                                }
-                                disabled={disabled}
-                              />
-                              {watch(`variations.${variationIndex}.images`)
-                                .length > 1 && (
-                                <IconButton
-                                  onClick={() =>
-                                    removeImageFromVariation(
-                                      variationIndex,
-                                      imageIndex
-                                    )
-                                  }
-                                  color="error"
-                                  size="small"
-                                  disabled={disabled}
-                                >
-                                  <Delete />
-                                </IconButton>
-                              )}
-                            </Box>
-                          )
-                        )}
-                        <Button
-                          startIcon={<Add />}
-                          onClick={() => addImageToVariation(variationIndex)}
-                          size="small"
-                          disabled={disabled}
-                        >
-                          افزودن تصویر
-                        </Button>
+                        <Grid container spacing={2}>
+                          {watch(`variations.${variationIndex}.images`)?.map(
+                            (imageUrl, imageIndex) => (
+                              <Grid item xs={12} md={6} lg={4} key={imageIndex}>
+                                <Box sx={{ position: "relative" }}>
+                                  <ImageKitUpload
+                                    existingImageUrl={imageUrl}
+                                    onUploadSuccess={(newImageUrl) => {
+                                      const currentImages = watch(
+                                        `variations.${variationIndex}.images`
+                                      );
+                                      const updatedImages = [...currentImages];
+                                      updatedImages[imageIndex] = newImageUrl;
+                                      setValue(
+                                        `variations.${variationIndex}.images`,
+                                        updatedImages
+                                      );
+                                    }}
+                                    onRemove={() =>
+                                      removeImageFromVariation(
+                                        variationIndex,
+                                        imageIndex
+                                      )
+                                    }
+                                    disabled={disabled}
+                                  />
+                                  {watch(`variations.${variationIndex}.images`)
+                                    .length > 1 && (
+                                    <IconButton
+                                      sx={{
+                                        position: "absolute",
+                                        top: 8,
+                                        right: 8,
+                                        backgroundColor: "rgba(0,0,0,0.5)",
+                                        color: "white",
+                                        "&:hover": {
+                                          backgroundColor: "rgba(0,0,0,0.7)",
+                                        },
+                                      }}
+                                      size="small"
+                                      onClick={() =>
+                                        removeImageFromVariation(
+                                          variationIndex,
+                                          imageIndex
+                                        )
+                                      }
+                                      disabled={disabled}
+                                    >
+                                      <Delete fontSize="small" />
+                                    </IconButton>
+                                  )}
+                                </Box>
+                              </Grid>
+                            )
+                          )}
+                        </Grid>
+                        <Box sx={{ mt: 2 }}>
+                          <Button
+                            startIcon={<Add />}
+                            onClick={() => addImageToVariation(variationIndex)}
+                            size="small"
+                            variant="outlined"
+                            disabled={disabled}
+                          >
+                            افزودن تصویر
+                          </Button>
+                        </Box>
                       </Grid>
                     </Grid>
                   </Paper>

@@ -98,7 +98,7 @@ const theme = createTheme({
         "#root": {
           width: "100%",
           height: "100vh",
-          overflow: "hidden",
+          overflow: "auto",
         },
       },
     },
@@ -144,7 +144,7 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
       sx={{
         display: "flex",
         width: "100%",
-        overflow: "hidden",
+        height: "100vh",
         direction: "rtl",
       }}
     >
@@ -154,11 +154,10 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({
         sx={{
           flexGrow: 1,
           width: { xs: "100%", sm: `calc(100% - ${drawerWidth}px)` },
-          minHeight: "100vh",
-          maxHeight: { xs: "100vh", sm: "none" },
+          height: "100vh",
           backgroundColor: "background.default",
-          overflow: "auto",
           position: "relative",
+          overflow: "auto",
         }}
       >
         <Toolbar sx={{ display: { sm: "none" } }} />
