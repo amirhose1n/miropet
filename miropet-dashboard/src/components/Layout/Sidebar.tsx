@@ -1,8 +1,8 @@
 import {
-  Analytics,
   Dashboard,
   ExitToApp,
   Inventory,
+  LocalShipping,
   People,
   Settings,
   ShoppingCart,
@@ -41,8 +41,8 @@ const menuItems: MenuItem[] = [
   { text: "داشبورد", icon: <Dashboard />, path: "/" },
   { text: "محصولات", icon: <Inventory />, path: "/products" },
   { text: "سفارشات", icon: <ShoppingCart />, path: "/orders" },
+  { text: "روش‌های تحویل", icon: <LocalShipping />, path: "/delivery-methods" },
   { text: "کاربران", icon: <People />, path: "/users", adminOnly: true },
-  { text: "تحلیل‌ها", icon: <Analytics />, path: "/analytics" },
   { text: "تنظیمات", icon: <Settings />, path: "/settings" },
 ];
 

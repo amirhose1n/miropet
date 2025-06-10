@@ -29,9 +29,13 @@ import Sidebar from "./components/Layout/Sidebar";
 
 // Pages
 import Dashboard from "./pages/Dashboard";
+import DeliveryMethodForm from "./pages/DeliveryMethodForm";
+import DeliveryMethods from "./pages/DeliveryMethods";
 import Login from "./pages/Login";
+import Orders from "./pages/Orders";
 import ProductForm from "./pages/ProductForm";
 import Products from "./pages/Products";
+import Settings from "./pages/Settings";
 import UserForm from "./pages/UserForm";
 import Users from "./pages/Users";
 
@@ -254,6 +258,46 @@ const AppContent: React.FC = () => {
         }
       />
       <Route
+        path="/delivery-methods"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <DeliveryMethods />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/delivery-methods/new"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <DeliveryMethodForm />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/delivery-methods/:id"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <DeliveryMethodForm disabled />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/delivery-methods/:id/edit"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <DeliveryMethodForm />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/users"
         element={
           <ProtectedRoute>
@@ -288,17 +332,7 @@ const AppContent: React.FC = () => {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <div>صفحه سفارشات - به زودی</div>
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/analytics"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <div>صفحه تحلیل‌ها - به زودی</div>
+              <Orders />
             </DashboardLayout>
           </ProtectedRoute>
         }
@@ -308,7 +342,7 @@ const AppContent: React.FC = () => {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <div>صفحه تنظیمات - به زودی</div>
+              <Settings />
             </DashboardLayout>
           </ProtectedRoute>
         }

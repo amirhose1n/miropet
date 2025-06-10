@@ -39,7 +39,6 @@ const getOrCreateCart = async (req: Request): Promise<ICart | null> => {
 export const getCart = async (req: Request, res: Response): Promise<void> => {
   try {
     const cart = await getOrCreateCart(req);
-
     if (!cart) {
       res.status(404).json({
         success: false,
@@ -48,32 +47,56 @@ export const getCart = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Populate product details for response
-    await cart.populate("items.productId");
+    // Get all products for cart items
+    const productIds = cart.items.map((item) => item.productId);
+    const products = await Product.find({ _id: { $in: productIds } });
 
-    // Format cart items with product details
-    const formattedItems = cart.items.map((item) => {
-      const product = item.productId as any;
-      const variation = product.variations[item.variationIndex];
+    const formattedItems = cart.items
+      .map((item) => {
+        const product = products.find(
+          (p) => (p._id as any).toString() === item.productId.toString()
+        );
+        if (!product || !product.variations[item.variationIndex]) {
+          return null; // Will be filtered out
+        }
 
-      return {
-        id: `${product._id}-${item.variationIndex}`,
-        product: {
-          _id: product._id,
-          name: product.name,
-          brand: product.brand,
-          category: product.category,
-        },
-        variation: {
-          ...variation,
-          index: item.variationIndex,
-        },
-        quantity: item.quantity,
-        unitPrice: item.price,
-        totalPrice: item.price * item.quantity,
-        addedAt: item.addedAt,
-      };
-    });
+        const variation = product.variations[item.variationIndex];
+
+        // Calculate current price with discount
+        const currentPrice =
+          variation.discount && variation.discount > 0
+            ? variation.price - variation.discount
+            : variation.price;
+
+        return {
+          id: `${product._id}-${item.variationIndex}`,
+          product: {
+            _id: product._id,
+            name: product.name,
+            brand: product.brand,
+            category: product.category,
+          },
+          variation: {
+            ...variation,
+            index: item.variationIndex,
+          },
+          quantity: item.quantity,
+          unitPrice: currentPrice, // Use current discounted price
+          totalPrice: currentPrice * item.quantity,
+          addedAt: item.addedAt,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null); // Remove null items and fix type
+
+    // Recalculate totals based on current prices
+    const totalItems = formattedItems.reduce(
+      (sum, item) => sum + item.quantity,
+      0
+    );
+    const totalPrice = formattedItems.reduce(
+      (sum, item) => sum + item.totalPrice,
+      0
+    );
 
     res.status(200).json({
       success: true,
@@ -82,8 +105,8 @@ export const getCart = async (req: Request, res: Response): Promise<void> => {
         cart: {
           _id: cart._id,
           items: formattedItems,
-          totalItems: cart.totalItems,
-          totalPrice: cart.totalPrice,
+          totalItems,
+          totalPrice,
           createdAt: cart.createdAt,
           updatedAt: cart.updatedAt,
         },
@@ -174,11 +197,16 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
       cart.items[existingItemIndex].quantity = newQuantity;
     } else {
       // Add new item
+      const finalPrice =
+        variation.discount && variation.discount > 0
+          ? variation.price - variation.discount
+          : variation.price;
+
       cart.items.push({
         productId,
         variationIndex,
         quantity,
-        price: variation.price,
+        price: finalPrice,
         addedAt: new Date(),
       });
     }
@@ -271,7 +299,14 @@ export const updateCartItem = async (
       return;
     }
 
+    // Update quantity and price with current discount
+    const currentPrice =
+      variation.discount && variation.discount > 0
+        ? variation.price - variation.discount
+        : variation.price;
+
     cart.items[itemIndex].quantity = quantity;
+    cart.items[itemIndex].price = currentPrice; // Update to current discounted price
     await cart.save();
 
     res.status(200).json({

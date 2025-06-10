@@ -347,7 +347,6 @@ const Users: React.FC = () => {
                     <TableCell>ایمیل</TableCell>
                     <TableCell>نقش</TableCell>
                     <TableCell>تاریخ ایجاد</TableCell>
-                    <TableCell>آدرس‌ها</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -396,11 +395,6 @@ const Users: React.FC = () => {
                         <TableCell>
                           <Typography variant="body2" color="textSecondary">
                             {formatDate(user.createdAt)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="textSecondary">
-                            {user.addresses.length}
                           </Typography>
                         </TableCell>
                       </TableRow>

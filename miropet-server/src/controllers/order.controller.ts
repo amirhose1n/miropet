@@ -4,8 +4,33 @@ import { Cart } from "../models/Cart.model";
 import { Order } from "../models/Order.model";
 import { Product } from "../models/Product.model";
 
-// Create order from cart
-export const createOrder = async (
+// Fake Payment Service - Replace with real bank integration later
+class PaymentService {
+  static async processPayment(
+    orderData: any
+  ): Promise<{ success: boolean; transactionId?: string; error?: string }> {
+    // Simulate payment processing time
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Simulate random success/failure (90% success rate)
+    const success = Math.random() > 0.1;
+
+    if (success) {
+      return {
+        success: true,
+        transactionId: `TX${Date.now()}${Math.floor(Math.random() * 1000)}`,
+      };
+    } else {
+      return {
+        success: false,
+        error: "Payment failed due to insufficient funds or network error",
+      };
+    }
+  }
+}
+
+// Checkout and create order with payment processing
+export const checkout = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
@@ -18,32 +43,78 @@ export const createOrder = async (
       return;
     }
 
-    const { shippingAddress, paymentMethod, customerNotes } = req.body;
+    const {
+      shippingAddressId,
+      billingAddressId,
+      paymentMethod,
+      customerNotes,
+      deliveryMethodId,
+    } = req.body;
 
-    if (!shippingAddress) {
+    if (!shippingAddressId) {
       res.status(400).json({
         success: false,
-        message: "Shipping address is required",
+        message: "Shipping address ID is required",
       });
       return;
     }
 
-    // Validate shipping address
-    const requiredFields = [
-      "fullName",
-      "phone",
-      "street",
-      "city",
-      "postalCode",
-    ];
-    for (const field of requiredFields) {
-      if (!shippingAddress[field]) {
+    // Validate addresses belong to user
+    const { Address } = await import("../models/Address.model");
+
+    const shippingAddress = await Address.findOne({
+      _id: shippingAddressId,
+      userId: req.user._id,
+    });
+
+    if (!shippingAddress) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid shipping address",
+      });
+      return;
+    }
+
+    let billingAddress = null;
+    if (billingAddressId) {
+      billingAddress = await Address.findOne({
+        _id: billingAddressId,
+        userId: req.user._id,
+      });
+
+      if (!billingAddress) {
         res.status(400).json({
           success: false,
-          message: `${field} is required in shipping address`,
+          message: "Invalid billing address",
         });
         return;
       }
+    }
+
+    // Validate delivery method if provided
+    let deliveryMethod = null;
+    let deliveryMethodPrice = 0;
+    if (deliveryMethodId) {
+      const { DeliveryMethod } = await import("../models/DeliveryMethod.model");
+      deliveryMethod = await DeliveryMethod.findById(deliveryMethodId);
+
+      if (!deliveryMethod) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid delivery method",
+        });
+        return;
+      }
+
+      if (!deliveryMethod.isEnabled) {
+        res.status(400).json({
+          success: false,
+          message: "Selected delivery method is not available",
+        });
+        return;
+      }
+
+      deliveryMethodPrice = deliveryMethod.price;
     }
 
     // Get user's cart
@@ -93,7 +164,13 @@ export const createOrder = async (
         return;
       }
 
-      const totalPrice = cartItem.price * cartItem.quantity;
+      // Calculate current price with discount
+      const currentUnitPrice =
+        variation.discount && variation.discount > 0
+          ? variation.price - variation.discount
+          : variation.price;
+
+      const totalPrice = currentUnitPrice * cartItem.quantity;
       subtotal += totalPrice;
 
       orderItems.push({
@@ -107,18 +184,24 @@ export const createOrder = async (
           weight: variation.weight,
         },
         quantity: cartItem.quantity,
-        unitPrice: cartItem.price,
+        unitPrice: currentUnitPrice, // Use current discounted price
         totalPrice,
       });
     }
 
-    // Calculate order totals (you can add tax and shipping logic here)
-    const shippingCost = subtotal > 500000 ? 0 : 50000; // Free shipping over 500,000 IRR
-    const tax = 0; // Add tax calculation if needed
+    // Calculate order totals
+    const shippingCost =
+      deliveryMethodPrice > 0
+        ? deliveryMethodPrice
+        : subtotal > 500000
+        ? 0
+        : 50000;
+    const tax = 0;
+    // Math.floor(subtotal * 0.09);
     const discount = 0; // Add discount logic if needed
     const totalAmount = subtotal + shippingCost + tax - discount;
 
-    // Create the order
+    // Create the order first (status: submitted)
     const order = new Order({
       userId: req.user._id,
       items: orderItems,
@@ -127,45 +210,182 @@ export const createOrder = async (
       tax,
       discount,
       totalAmount,
-      shippingAddress,
+      deliveryMethodId: deliveryMethod?._id,
+      deliveryMethodName: deliveryMethod?.name,
+      deliveryMethodPrice: deliveryMethodPrice,
+      shippingAddressId: shippingAddress._id,
+      billingAddressId: billingAddress?._id,
       paymentMethod,
       customerNotes,
+      status: "submitted",
+      paymentStatus: "pending",
+      orderNumber: `ORD-${Date.now()}${Math.floor(Math.random() * 1000)}`,
     });
 
     await order.save();
 
-    // Update product stock
-    for (const cartItem of cart.items) {
-      const product = await Product.findById(cartItem.productId);
-      if (product && product.variations[cartItem.variationIndex]) {
-        product.variations[cartItem.variationIndex].stock -= cartItem.quantity;
-        await product.save();
+    // Process payment
+    const paymentResult = await PaymentService.processPayment({
+      orderId: order._id,
+      amount: totalAmount,
+      paymentMethod,
+      customerInfo: {
+        userId: req.user._id,
+        email: req.user.email,
+      },
+    });
+
+    if (paymentResult.success) {
+      // Payment successful - update order status
+      order.paymentStatus = "paid";
+      order.status = "inProgress";
+      await order.save();
+
+      // Update product stock
+      for (const cartItem of cart.items) {
+        const product = await Product.findById(cartItem.productId);
+        if (product && product.variations[cartItem.variationIndex]) {
+          product.variations[cartItem.variationIndex].stock -=
+            cartItem.quantity;
+          await product.save();
+        }
+      }
+
+      // Clear the cart
+      cart.items = [];
+      await cart.save();
+
+      res.status(201).json({
+        success: true,
+        message: "سفارش با موفقیت ثبت شد",
+        data: {
+          order: {
+            _id: order._id,
+            orderNumber: order.orderNumber,
+            totalAmount: order.totalAmount,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            createdAt: order.createdAt,
+          },
+          payment: {
+            transactionId: paymentResult.transactionId,
+            status: "completed",
+          },
+        },
+      });
+    } else {
+      // Payment failed - update order status
+      order.paymentStatus = "failed";
+      await order.save();
+
+      res.status(400).json({
+        success: false,
+        message: "Payment failed",
+        data: {
+          order: {
+            _id: order._id,
+            orderNumber: order.orderNumber,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+          },
+          payment: {
+            error: paymentResult.error,
+          },
+        },
+      });
+    }
+  } catch (error: any) {
+    console.error("Checkout error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to process checkout",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Get orders with filters
+export const getOrders = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      paymentStatus,
+      userId,
+      startDate,
+      endDate,
+      orderNumber,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build filter object
+    const filter: any = {};
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if (paymentStatus) {
+      filter.paymentStatus = paymentStatus;
+    }
+
+    if (userId) {
+      filter.userId = userId;
+    }
+
+    if (orderNumber) {
+      filter.orderNumber = { $regex: orderNumber, $options: "i" };
+    }
+
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        filter.createdAt.$lte = new Date(endDate as string);
       }
     }
 
-    // Clear the cart
-    cart.items = [];
-    await cart.save();
+    // Build sort object
+    const sort: any = {};
+    sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
 
-    res.status(201).json({
+    const orders = await Order.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(limitNum)
+      .populate("userId", "name email")
+      .populate("items.productId", "name brand category");
+
+    const totalOrders = await Order.countDocuments(filter);
+    const totalPages = Math.ceil(totalOrders / limitNum);
+
+    res.status(200).json({
       success: true,
-      message: "Order created successfully",
       data: {
-        order: {
-          _id: order._id,
-          orderNumber: order.orderNumber,
-          totalAmount: order.totalAmount,
-          status: order.status,
-          paymentStatus: order.paymentStatus,
-          createdAt: order.createdAt,
+        orders,
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          totalOrders,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
         },
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Get orders error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to create order",
-      error: process.env.NODE_ENV === "development" ? error : undefined,
+      message: "Failed to fetch orders",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -184,61 +404,63 @@ export const getUserOrders = async (
       return;
     }
 
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const skip = (page - 1) * limit;
+    const { page = 1, limit = 10, status, paymentStatus } = req.query;
 
-    const orders = await Order.find({ userId: req.user._id })
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build filter
+    const filter: any = { userId: req.user._id };
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if (paymentStatus) {
+      filter.paymentStatus = paymentStatus;
+    }
+
+    const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit)
+      .limit(limitNum)
       .populate("items.productId", "name brand category");
 
-    const totalOrders = await Order.countDocuments({ userId: req.user._id });
+    const totalOrders = await Order.countDocuments(filter);
 
     res.status(200).json({
       success: true,
-      message: "Orders retrieved successfully",
       data: {
         orders,
         pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(totalOrders / limit),
+          currentPage: pageNum,
+          totalPages: Math.ceil(totalOrders / limitNum),
           totalOrders,
-          hasNextPage: page < Math.ceil(totalOrders / limit),
-          hasPreviousPage: page > 1,
         },
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Get user orders error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve orders",
-      error: process.env.NODE_ENV === "development" ? error : undefined,
+      message: "Failed to fetch user orders",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
 
-// Get single order by ID
+// Get order by ID
 export const getOrderById = async (
-  req: AuthRequest,
+  req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({
-        success: false,
-        message: "User not authenticated",
-      });
-      return;
-    }
+    const { id } = req.params;
 
-    const { orderId } = req.params;
-
-    const order = await Order.findOne({
-      _id: orderId,
-      userId: req.user._id,
-    }).populate("items.productId");
+    const order = await Order.findById(id)
+      .populate("userId", "name email phone")
+      .populate("items.productId", "name brand category images");
 
     if (!order) {
       res.status(404).json({
@@ -250,38 +472,28 @@ export const getOrderById = async (
 
     res.status(200).json({
       success: true,
-      message: "Order retrieved successfully",
       data: { order },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Get order by ID error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve order",
-      error: process.env.NODE_ENV === "development" ? error : undefined,
+      message: "Failed to fetch order",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
 
-// Cancel order (only if status is pending or confirmed)
+// Cancel order (only allowed before 'posted' status)
 export const cancelOrder = async (
-  req: AuthRequest,
+  req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({
-        success: false,
-        message: "User not authenticated",
-      });
-      return;
-    }
+    const { id } = req.params;
+    const { reason } = req.body;
 
-    const { orderId } = req.params;
-
-    const order = await Order.findOne({
-      _id: orderId,
-      userId: req.user._id,
-    });
+    const order = await Order.findById(id);
 
     if (!order) {
       res.status(404).json({
@@ -291,13 +503,34 @@ export const cancelOrder = async (
       return;
     }
 
-    if (!["pending", "confirmed"].includes(order.status)) {
+    // Check if order can be canceled
+    if (order.status === "posted" || order.status === "done") {
       res.status(400).json({
         success: false,
-        message: "Order cannot be cancelled at this stage",
+        message: "Order cannot be canceled after it has been posted",
       });
       return;
     }
+
+    if (order.status === "canceled") {
+      res.status(400).json({
+        success: false,
+        message: "Order is already canceled",
+      });
+      return;
+    }
+
+    // Update order status
+    order.status = "canceled";
+    order.adminNotes = `Canceled: ${reason || "No reason provided"}`;
+
+    // Handle refund if payment was successful
+    if (order.paymentStatus === "paid") {
+      order.paymentStatus = "refunded";
+      // Here you would integrate with payment gateway to process refund
+    }
+
+    await order.save();
 
     // Restore product stock
     for (const item of order.items) {
@@ -308,71 +541,17 @@ export const cancelOrder = async (
       }
     }
 
-    order.updateStatus("cancelled");
-    await order.save();
-
     res.status(200).json({
       success: true,
-      message: "Order cancelled successfully",
+      message: "Order canceled successfully",
       data: { order },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Cancel order error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to cancel order",
-      error: process.env.NODE_ENV === "development" ? error : undefined,
-    });
-  }
-};
-
-// ===== ADMIN ENDPOINTS =====
-
-// Get all orders (Admin only)
-export const getAllOrders = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
-
-    const status = req.query.status as string;
-    const paymentStatus = req.query.paymentStatus as string;
-
-    // Build filter
-    const filter: any = {};
-    if (status) filter.status = status;
-    if (paymentStatus) filter.paymentStatus = paymentStatus;
-
-    const orders = await Order.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("userId", "name email")
-      .populate("items.productId", "name brand");
-
-    const totalOrders = await Order.countDocuments(filter);
-
-    res.status(200).json({
-      success: true,
-      message: "Orders retrieved successfully",
-      data: {
-        orders,
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(totalOrders / limit),
-          totalOrders,
-          hasNextPage: page < Math.ceil(totalOrders / limit),
-          hasPreviousPage: page > 1,
-        },
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve orders",
-      error: process.env.NODE_ENV === "development" ? error : undefined,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -383,26 +562,17 @@ export const updateOrderStatus = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { orderId } = req.params;
-    const { status, trackingNumber, adminNotes } = req.body;
-
-    if (!status) {
-      res.status(400).json({
-        success: false,
-        message: "Status is required",
-      });
-      return;
-    }
+    const { id } = req.params;
+    const { status, adminNotes, trackingNumber } = req.body;
 
     const validStatuses = [
-      "pending",
-      "confirmed",
-      "processing",
-      "shipped",
-      "delivered",
-      "cancelled",
-      "returned",
+      "submitted",
+      "inProgress",
+      "posted",
+      "done",
+      "canceled",
     ];
+
     if (!validStatuses.includes(status)) {
       res.status(400).json({
         success: false,
@@ -411,7 +581,8 @@ export const updateOrderStatus = async (
       return;
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(id);
+
     if (!order) {
       res.status(404).json({
         success: false,
@@ -420,10 +591,16 @@ export const updateOrderStatus = async (
       return;
     }
 
+    // Update order
     order.updateStatus(status);
 
-    if (trackingNumber) order.trackingNumber = trackingNumber;
-    if (adminNotes) order.adminNotes = adminNotes;
+    if (adminNotes) {
+      order.adminNotes = adminNotes;
+    }
+
+    if (trackingNumber) {
+      order.trackingNumber = trackingNumber;
+    }
 
     await order.save();
 
@@ -432,101 +609,63 @@ export const updateOrderStatus = async (
       message: "Order status updated successfully",
       data: { order },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Update order status error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update order status",
-      error: process.env.NODE_ENV === "development" ? error : undefined,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
 
-// Get order statistics (Admin only)
+// Get order statistics
 export const getOrderStats = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-
-    // Total orders
-    const totalOrders = await Order.countDocuments();
-
-    // Orders this month
-    const ordersThisMonth = await Order.countDocuments({
-      createdAt: { $gte: startOfMonth },
-    });
-
-    // Orders last month
-    const ordersLastMonth = await Order.countDocuments({
-      createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
-    });
-
-    // Revenue this month
-    const revenueThisMonth = await Order.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startOfMonth },
-          paymentStatus: "paid",
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$totalAmount" },
-        },
-      },
-    ]);
-
-    // Revenue last month
-    const revenueLastMonth = await Order.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
-          paymentStatus: "paid",
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$totalAmount" },
-        },
-      },
-    ]);
-
-    // Orders by status
-    const ordersByStatus = await Order.aggregate([
+    const stats = await Order.aggregate([
       {
         $group: {
           _id: "$status",
           count: { $sum: 1 },
+          totalAmount: { $sum: "$totalAmount" },
         },
       },
     ]);
 
+    const paymentStats = await Order.aggregate([
+      {
+        $group: {
+          _id: "$paymentStatus",
+          count: { $sum: 1 },
+          totalAmount: { $sum: "$totalAmount" },
+        },
+      },
+    ]);
+
+    const totalOrders = await Order.countDocuments();
+    const totalRevenue = await Order.aggregate([
+      { $match: { paymentStatus: "paid" } },
+      { $group: { _id: null, total: { $sum: "$totalAmount" } } },
+    ]);
+
     res.status(200).json({
       success: true,
-      message: "Order statistics retrieved successfully",
       data: {
+        orderStats: stats,
+        paymentStats,
         totalOrders,
-        ordersThisMonth,
-        ordersLastMonth,
-        revenueThisMonth: revenueThisMonth[0]?.total || 0,
-        revenueLastMonth: revenueLastMonth[0]?.total || 0,
-        ordersByStatus: ordersByStatus.reduce((acc, item) => {
-          acc[item._id] = item.count;
-          return acc;
-        }, {}),
+        totalRevenue: totalRevenue[0]?.total || 0,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Get order stats error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve order statistics",
-      error: process.env.NODE_ENV === "development" ? error : undefined,
+      message: "Failed to fetch order statistics",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };

@@ -1,26 +1,103 @@
-import { body } from "express-validator";
+import { body, ValidationChain } from "express-validator";
 
-export const validateRegister = [
-  body("email")
-    .isEmail()
-    .normalizeEmail()
-    .withMessage("لطفاً یک ایمیل معتبر وارد کنید"),
+export const validateRegister: ValidationChain[] = [
+  body("name")
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Name must be between 2 and 50 characters"),
+  body("email").isEmail().normalizeEmail().withMessage("Valid email required"),
   body("password")
     .isLength({ min: 6 })
-    .withMessage("رمز عبور باید حداقل ۶ کاراکتر باشد"),
+    .withMessage("Password must be at least 6 characters"),
+];
+
+export const validateLogin: ValidationChain[] = [
+  body("email").isEmail().normalizeEmail().withMessage("Valid email required"),
+  body("password").notEmpty().withMessage("Password is required"),
+  body("sessionId")
+    .optional()
+    .isString()
+    .withMessage("Session ID must be a string"),
+];
+
+export const validateChangePassword: ValidationChain[] = [
+  body("currentPassword")
+    .notEmpty()
+    .withMessage("Current password is required"),
+  body("newPassword")
+    .isLength({ min: 6 })
+    .withMessage("New password must be at least 6 characters")
+    .custom((value, { req }) => {
+      if (value === req.body.currentPassword) {
+        throw new Error("New password must be different from current password");
+      }
+      return true;
+    }),
+];
+
+export const validateProduct: ValidationChain[] = [
+  body("name")
+    .trim()
+    .isLength({ min: 2, max: 200 })
+    .withMessage("Name must be between 2 and 200 characters"),
+  body("description")
+    .optional()
+    .trim()
+    .isLength({ max: 2000 })
+    .withMessage("Description must not exceed 2000 characters"),
+  body("category")
+    .isArray({ min: 1 })
+    .withMessage("At least one category is required"),
+  body("brand")
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage("Brand must not exceed 100 characters"),
+  body("variations")
+    .isArray({ min: 1 })
+    .withMessage("At least one variation is required"),
+  body("variations.*.price")
+    .isNumeric()
+    .isFloat({ min: 0 })
+    .withMessage("Price must be a positive number"),
+  body("variations.*.stock")
+    .isInt({ min: 0 })
+    .withMessage("Stock must be a non-negative integer"),
+  body("isFeatured")
+    .optional()
+    .isBoolean()
+    .withMessage("isFeatured must be boolean"),
+];
+
+export const validateUserCreate: ValidationChain[] = [
+  body("name")
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Name must be between 2 and 50 characters"),
+  body("email").isEmail().normalizeEmail().withMessage("Valid email required"),
+  body("password")
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters"),
+  body("role")
+    .isIn(["customer", "admin"])
+    .withMessage("Role must be either customer or admin"),
+];
+
+export const validateUserUpdate: ValidationChain[] = [
   body("name")
     .optional()
     .trim()
     .isLength({ min: 2, max: 50 })
-    .withMessage("نام باید بین ۲ تا ۵۰ کاراکتر باشد"),
-];
-
-export const validateLogin = [
+    .withMessage("Name must be between 2 and 50 characters"),
   body("email")
+    .optional()
     .isEmail()
     .normalizeEmail()
-    .withMessage("لطفاً یک ایمیل معتبر وارد کنید"),
-  body("password").notEmpty().withMessage("رمز عبور الزامی است"),
+    .withMessage("Valid email required"),
+  body("role")
+    .optional()
+    .isIn(["customer", "admin"])
+    .withMessage("Role must be either customer or admin"),
 ];
 
 export const validateAdminCreation = [
@@ -41,71 +118,4 @@ export const validateAdminCreation = [
     .withMessage("نام باید بین ۲ تا ۵۰ کاراکتر باشد")
     .notEmpty()
     .withMessage("نام برای کاربران مدیر الزامی است"),
-];
-
-export const validateProduct = [
-  body("name")
-    .trim()
-    .notEmpty()
-    .withMessage("نام محصول الزامی است")
-    .isLength({ max: 200 })
-    .withMessage("نام محصول نمی‌تواند بیش از ۲۰۰ کاراکتر باشد"),
-  body("description")
-    .optional()
-    .trim()
-    .isLength({ max: 1000 })
-    .withMessage("توضیحات نمی‌تواند بیش از ۱۰۰۰ کاراکتر باشد"),
-  body("category")
-    .isArray({ min: 1 })
-    .withMessage("حداقل یک دسته‌بندی الزامی است")
-    .custom((categories) => {
-      if (!Array.isArray(categories)) return false;
-      return categories.every(
-        (cat) => typeof cat === "string" && cat.trim().length > 0
-      );
-    })
-    .withMessage("همه دسته‌بندی‌ها باید رشته‌های غیرخالی باشند"),
-  body("brand")
-    .optional()
-    .trim()
-    .isLength({ max: 100 })
-    .withMessage("برند نمی‌تواند بیش از ۱۰۰ کاراکتر باشد"),
-  body("variations")
-    .isArray({ min: 1 })
-    .withMessage("حداقل یک تنوع محصول الزامی است")
-    .custom((variations: any[]) => {
-      if (!Array.isArray(variations)) return false;
-      return variations.every((variation: any) => {
-        return (
-          typeof variation === "object" &&
-          variation !== null &&
-          (variation.color === undefined ||
-            (typeof variation.color === "string" &&
-              variation.color.trim().length > 0)) &&
-          (variation.size === undefined ||
-            (typeof variation.size === "string" &&
-              variation.size.trim().length > 0)) &&
-          typeof variation.price === "number" &&
-          variation.price > 0 &&
-          (variation.weight === undefined ||
-            (typeof variation.weight === "string" &&
-              variation.weight.trim().length > 0)) &&
-          typeof variation.stock === "number" &&
-          Number.isInteger(variation.stock) &&
-          variation.stock >= 0 &&
-          Array.isArray(variation.images) &&
-          variation.images.length >= 1 &&
-          variation.images.every(
-            (img: any) => typeof img === "string" && img.trim().length > 0
-          )
-        );
-      });
-    })
-    .withMessage(
-      "هر تنوع باید شامل قیمت مثبت، موجودی صحیح غیرمنفی و حداقل یک تصویر معتبر باشد"
-    ),
-  body("isFeatured")
-    .optional()
-    .isBoolean()
-    .withMessage("ویژه بودن باید مقدار بولی باشد"),
 ];

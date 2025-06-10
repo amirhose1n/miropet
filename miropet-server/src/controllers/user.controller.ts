@@ -28,7 +28,6 @@ export const getUserProfile = async (
           name: req.user.name,
           email: req.user.email,
           role: req.user.role,
-          addresses: req.user.addresses,
           createdAt: req.user.createdAt,
         },
       },
@@ -198,7 +197,6 @@ export const getAllUsers = async (
       name: user.name,
       email: user.email,
       role: user.role,
-      addresses: user.addresses,
       createdAt: user.createdAt,
     }));
 

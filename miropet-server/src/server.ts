@@ -5,14 +5,17 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { connectDB } from "./config/database";
 import { errorHandler } from "./middleware/error.middleware";
+import addressRoutes from "./routes/address.routes";
 import authRoutes from "./routes/auth.routes";
 import cartRoutes from "./routes/cart.routes";
 import categoryRoutes from "./routes/category.routes";
+import deliveryMethodRoutes from "./routes/deliveryMethod.routes";
 import imagekitRoutes from "./routes/imagekit.routes";
 import orderRoutes from "./routes/order.routes";
 import productRoutes from "./routes/product.routes";
 import userRoutes from "./routes/user.routes";
 import { initializeAdminUser } from "./utils/initAdmin.utils";
+import { seedDeliveryMethods } from "./utils/seedDeliveryMethods.utils";
 
 // Load environment variables
 dotenv.config();
@@ -40,13 +43,16 @@ app.use(express.urlencoded({ extended: true }));
 const initializeApp = async () => {
   await connectDB();
   await initializeAdminUser();
+  await seedDeliveryMethods();
 };
 
 initializeApp();
 
 // Routes
+app.use("/api/address", addressRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/delivery-methods", deliveryMethodRoutes);
 app.use("/api/imagekit", imagekitRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/products", productRoutes);

@@ -153,6 +153,25 @@ export const createProduct = async (
         });
         return;
       }
+
+      // Validate discount if provided
+      if (variation.discount !== undefined) {
+        if (typeof variation.discount !== "number" || variation.discount < 0) {
+          res.status(400).json({
+            success: false,
+            message: "تخفیف باید یک عدد غیرمنفی باشد",
+          });
+          return;
+        }
+        if (variation.discount >= variation.price) {
+          res.status(400).json({
+            success: false,
+            message: "مقدار تخفیف باید کمتر از قیمت اصلی باشد",
+          });
+          return;
+        }
+      }
+
       if (
         typeof variation.stock !== "number" ||
         variation.stock < 0 ||
@@ -236,6 +255,28 @@ export const updateProduct = async (
           });
           return;
         }
+
+        // Validate discount if provided
+        if (variation.discount !== undefined) {
+          if (
+            typeof variation.discount !== "number" ||
+            variation.discount < 0
+          ) {
+            res.status(400).json({
+              success: false,
+              message: "تخفیف باید یک عدد غیرمنفی باشد",
+            });
+            return;
+          }
+          if (variation.discount >= variation.price) {
+            res.status(400).json({
+              success: false,
+              message: "مقدار تخفیف باید کمتر از قیمت اصلی باشد",
+            });
+            return;
+          }
+        }
+
         if (
           typeof variation.stock !== "number" ||
           variation.stock < 0 ||

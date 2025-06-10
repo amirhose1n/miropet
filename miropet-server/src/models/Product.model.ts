@@ -4,6 +4,7 @@ export interface IVariation {
   color?: string;
   size?: string;
   price: number;
+  discount?: number; // Discount amount (must be less than price)
   weight?: string;
   stock: number;
   images: string[];
@@ -25,6 +26,17 @@ const variationSchema = new Schema<IVariation>(
     color: { type: String },
     size: { type: String },
     price: { type: Number, required: true, min: 0 },
+    discount: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: {
+        validator: function (this: IVariation, value: number) {
+          return value < this.price;
+        },
+        message: "Discount must be less than price",
+      },
+    },
     weight: { type: String },
     stock: { type: Number, required: true, default: 0, min: 0 },
     images: [{ type: String, required: true }],

@@ -45,6 +45,18 @@ const schema = yup.object({
           .number()
           .min(0, "قیمت باید مثبت باشد")
           .required("قیمت الزامی است"),
+        discount: yup
+          .number()
+          .min(0, "تخفیف باید مثبت باشد")
+          .test(
+            "discount-less-than-price",
+            "تخفیف باید کمتر از قیمت باشد",
+            function (value) {
+              if (!value) return true; // discount is optional
+              const price = this.parent.price;
+              return value < price;
+            }
+          ),
         weight: yup.string(),
         stock: yup
           .number()
@@ -93,6 +105,7 @@ const ProductForm: React.FC<{ disabled?: boolean }> = ({ disabled }) => {
           color: "",
           size: "",
           price: 0,
+          discount: 0,
           weight: "",
           stock: 0,
           images: [""],
@@ -236,6 +249,7 @@ const ProductForm: React.FC<{ disabled?: boolean }> = ({ disabled }) => {
       color: "",
       size: "",
       price: 0,
+      discount: 0,
       weight: "",
       stock: 0,
       images: [""],
@@ -516,6 +530,24 @@ const ProductForm: React.FC<{ disabled?: boolean }> = ({ disabled }) => {
                           error={!!errors.variations?.[variationIndex]?.price}
                           helperText={
                             errors.variations?.[variationIndex]?.price?.message
+                          }
+                          disabled={disabled}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          {...register(`variations.${variationIndex}.discount`)}
+                          fullWidth
+                          label="تخفیف (تومان)"
+                          placeholder="مقدار تخفیف"
+                          type="number"
+                          size="small"
+                          error={
+                            !!errors.variations?.[variationIndex]?.discount
+                          }
+                          helperText={
+                            errors.variations?.[variationIndex]?.discount
+                              ?.message
                           }
                           disabled={disabled}
                         />

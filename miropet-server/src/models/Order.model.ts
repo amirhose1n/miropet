@@ -15,16 +15,6 @@ export interface IOrderItem {
   totalPrice: number;
 }
 
-export interface IShippingAddress {
-  fullName: string;
-  phone: string;
-  street: string;
-  city: string;
-  postalCode: string;
-  country: string;
-  notes?: string;
-}
-
 export interface IOrder extends Document {
   userId: mongoose.Types.ObjectId;
   orderNumber: string; // Unique order number for customer reference
@@ -37,19 +27,17 @@ export interface IOrder extends Document {
   discount: number;
   totalAmount: number;
 
-  // Address
-  shippingAddress: IShippingAddress;
-  billingAddress?: IShippingAddress; // Optional, can be same as shipping
+  // Delivery
+  deliveryMethodId?: mongoose.Types.ObjectId;
+  deliveryMethodName?: string; // Store for historical data
+  deliveryMethodPrice?: number; // Store for historical data
+
+  // Addresses - reference by ID
+  shippingAddressId: mongoose.Types.ObjectId;
+  billingAddressId?: mongoose.Types.ObjectId;
 
   // Order Status
-  status:
-    | "pending"
-    | "confirmed"
-    | "processing"
-    | "shipped"
-    | "delivered"
-    | "cancelled"
-    | "returned";
+  status: "submitted" | "inProgress" | "posted" | "done" | "canceled";
   paymentStatus: "pending" | "paid" | "failed" | "refunded";
   paymentMethod?: string;
 
@@ -111,19 +99,6 @@ const orderItemSchema = new Schema<IOrderItem>(
   { _id: false }
 );
 
-const shippingAddressSchema = new Schema<IShippingAddress>(
-  {
-    fullName: { type: String, required: true },
-    phone: { type: String, required: true },
-    street: { type: String, required: true },
-    city: { type: String, required: true },
-    postalCode: { type: String, required: true },
-    country: { type: String, required: true, default: "Iran" },
-    notes: String,
-  },
-  { _id: false }
-);
-
 const orderSchema = new Schema<IOrder>({
   userId: {
     type: Schema.Types.ObjectId,
@@ -164,26 +139,33 @@ const orderSchema = new Schema<IOrder>({
     min: 0,
   },
 
-  // Addresses
-  shippingAddress: {
-    type: shippingAddressSchema,
+  // Delivery
+  deliveryMethodId: {
+    type: Schema.Types.ObjectId,
+    ref: "DeliveryMethod",
+  },
+  deliveryMethodName: String,
+  deliveryMethodPrice: {
+    type: Number,
+    min: 0,
+  },
+
+  // Addresses - reference by ID
+  shippingAddressId: {
+    type: Schema.Types.ObjectId,
+    ref: "ShippingAddress",
     required: true,
   },
-  billingAddress: shippingAddressSchema,
+  billingAddressId: {
+    type: Schema.Types.ObjectId,
+    ref: "ShippingAddress",
+  },
 
   // Status
   status: {
     type: String,
-    enum: [
-      "pending",
-      "confirmed",
-      "processing",
-      "shipped",
-      "delivered",
-      "cancelled",
-      "returned",
-    ],
-    default: "pending",
+    enum: ["submitted", "inProgress", "posted", "done", "canceled"],
+    default: "submitted",
   },
   paymentStatus: {
     type: String,
@@ -239,13 +221,13 @@ orderSchema.methods.updateStatus = function (newStatus: string) {
   this.status = newStatus;
 
   switch (newStatus) {
-    case "confirmed":
+    case "inProgress":
       this.confirmedAt = new Date();
       break;
-    case "shipped":
+    case "posted":
       this.shippedAt = new Date();
       break;
-    case "delivered":
+    case "done":
       this.deliveredAt = new Date();
       break;
   }

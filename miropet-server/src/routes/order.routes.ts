@@ -1,72 +1,26 @@
-import { Router } from "express";
+import express from "express";
 import {
   cancelOrder,
-  createOrder,
-  getAllOrders,
+  checkout,
   getOrderById,
+  getOrders,
   getOrderStats,
   getUserOrders,
   updateOrderStatus,
 } from "../controllers/order.controller";
 import { adminAuth, auth } from "../middleware/auth.middleware";
 
-const router = Router();
+const router = express.Router();
 
-// ===== USER ROUTES =====
+// Public/Customer routes
+router.post("/checkout", auth, checkout); // Checkout and create order with payment
+router.get("/my-orders", auth, getUserOrders); // Get current user's orders
+router.get("/:id", getOrderById); // Get order by ID (can be used by customer or admin)
+router.patch("/:id/cancel", cancelOrder); // Cancel order (before posted status)
 
-/**
- * @route   POST /api/orders
- * @desc    Create order from cart
- * @access  Private
- * @body    { shippingAddress, paymentMethod?, customerNotes? }
- */
-router.post("/", auth, createOrder);
-
-/**
- * @route   GET /api/orders
- * @desc    Get user's orders with pagination
- * @access  Private
- * @query   { page?, limit? }
- */
-router.get("/", auth, getUserOrders);
-
-/**
- * @route   GET /api/orders/:orderId
- * @desc    Get single order by ID
- * @access  Private
- */
-router.get("/:orderId", auth, getOrderById);
-
-/**
- * @route   PUT /api/orders/:orderId/cancel
- * @desc    Cancel order (only pending/confirmed orders)
- * @access  Private
- */
-router.put("/:orderId/cancel", auth, cancelOrder);
-
-// ===== ADMIN ROUTES =====
-
-/**
- * @route   GET /api/orders/admin/all
- * @desc    Get all orders (Admin only)
- * @access  Admin
- * @query   { page?, limit?, status?, paymentStatus? }
- */
-router.get("/admin/all", adminAuth, getAllOrders);
-
-/**
- * @route   PUT /api/orders/admin/:orderId/status
- * @desc    Update order status (Admin only)
- * @access  Admin
- * @body    { status, trackingNumber?, adminNotes? }
- */
-router.put("/admin/:orderId/status", adminAuth, updateOrderStatus);
-
-/**
- * @route   GET /api/orders/admin/stats
- * @desc    Get order statistics (Admin only)
- * @access  Admin
- */
-router.get("/admin/stats", adminAuth, getOrderStats);
+// Admin routes
+router.get("/", adminAuth, getOrders); // Get all orders with filters (admin only)
+router.patch("/:id/status", adminAuth, updateOrderStatus); // Update order status (admin only)
+router.get("/stats/summary", adminAuth, getOrderStats); // Get order statistics (admin only)
 
 export default router;

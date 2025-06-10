@@ -1,0 +1,6 @@
+### Test Delivery Methods API
+
+GET http://localhost:5000/api/delivery-methods
+Content-Type: application/json
+
+### 
