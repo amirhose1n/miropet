@@ -10,7 +10,8 @@
     "server-dev": "cd miropet-server && npm run dev",
     "client-dev": "cd miropet-client && npm run dev",
     "dashboard-dev": "cd miropet-dashboard && npm run dev",
-    "build-all": "cd miropet-server && npm run build && cd ../miropet-client && npm run build && cd ../miropet-dashboard && npm run build"
+    "build-all": "cd miropet-server && npm run build && cd ../miropet-client && npm run build && cd ../miropet-dashboard && npm run build",
+    "dev": "npm run server-dev && npm run client-dev && npm run dashboard-dev"
   },
   "keywords": [
     "pet-store",
